@@ -8,6 +8,8 @@ ExecStart=/usr/local/bin/electrumx_server
 User=electrumx
 LimitNOFILE=8192
 TimeoutStopSec=30min
+Restart=always
+RuntimeMaxSec=604800
 
 [Install]
 WantedBy=multi-user.target
