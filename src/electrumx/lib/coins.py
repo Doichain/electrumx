@@ -1232,6 +1232,75 @@ class NamecoinRegtest(NamecoinTestnet):
     NAME_EXPIRATION = 30
 
 
+class Doichain(NameIndexAuxPoWMixin, Coin):
+    NAME = "Doichain"
+    SHORTNAME = "DOI"
+    NET = "mainnet"
+    P2PKH_VERBYTE = bytes.fromhex("34")
+    P2SH_VERBYTES = (bytes.fromhex("0d"),)
+    GENESIS_HASH = ('000006fdd8b4d786fd9bdde5bae9486c'
+                    '464e3aa4336c5f8415dfdd3fc1679134')
+    DESERIALIZER = lib_tx.DeserializerAuxPowSegWit
+    # getchaintxstats on a synced node, 2026-09-16
+    TX_COUNT = 2_742_220
+    TX_COUNT_HEIGHT = 431_763
+    TX_PER_BLOCK = 2
+    # 8339 since Core 31; 8338 is the P2P port there.
+    RPC_PORT = 8339
+    PEERS = []
+    BLOCK_PROCESSOR = block_proc.NameIndexBlockProcessor
+    # Consensus::MainNetConsensus::NameExpirationDepth, above height 48,000.
+    NAME_EXPIRATION = 36_000
+
+    # Name opcodes.  Doichain adds a fourth operation, name_doi (OP_10), which
+    # Namecoin does not have; it carries the DOI payload of the dApp.
+    OP_NAME_NEW = OpCodes.OP_1
+    OP_NAME_FIRSTUPDATE = OpCodes.OP_2
+    OP_NAME_UPDATE = OpCodes.OP_3
+    OP_NAME_DOI = OpCodes.OP_10
+
+    # Valid name prefixes.
+    NAME_NEW_OPS = [OP_NAME_NEW, -1, OpCodes.OP_2DROP]
+    NAME_FIRSTUPDATE_OPS = [OP_NAME_FIRSTUPDATE, "name", -1, -1,
+                            OpCodes.OP_2DROP, OpCodes.OP_2DROP]
+    NAME_UPDATE_OPS = [OP_NAME_UPDATE, "name", -1, OpCodes.OP_2DROP,
+                       OpCodes.OP_DROP]
+    NAME_DOI_OPS = [OP_NAME_DOI, "name", -1, OpCodes.OP_2DROP,
+                    OpCodes.OP_DROP]
+    NAME_OPERATIONS = (
+        NAME_NEW_OPS,
+        NAME_FIRSTUPDATE_OPS,
+        NAME_UPDATE_OPS,
+        NAME_DOI_OPS,
+    )
+
+
+class DoichainTestnet(Doichain):
+    NAME = "Doichain"
+    SHORTNAME = "DOI"
+    NET = "testnet"
+    P2PKH_VERBYTE = bytes.fromhex("6f")
+    P2SH_VERBYTES = (bytes.fromhex("c4"),)
+    GENESIS_HASH = ('0000cd7572b3ecc78b7cddf49eda95e7'
+                    '18d4df77c236ca2e375125e111e7e9c4')
+    RPC_PORT = 18339
+    PEERS = []
+    TX_COUNT = 1
+    TX_COUNT_HEIGHT = 1
+
+
+class DoichainRegtest(DoichainTestnet):
+    NAME = "Doichain"
+    NET = "regtest"
+    GENESIS_HASH = ('0231881e96d6690eb00bb69cd8e221df'
+                    '3564e2cd95829d47d131ed5110a34e9d')
+    RPC_PORT = 18332
+    PEERS = []
+    TX_COUNT = 1
+    TX_COUNT_HEIGHT = 1
+    NAME_EXPIRATION = 30
+
+
 class Dogecoin(AuxPowMixin, Coin):
     NAME = "Dogecoin"
     SHORTNAME = "DOGE"
