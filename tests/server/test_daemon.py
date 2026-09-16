@@ -5,14 +5,9 @@ import logging
 
 import pytest
 
-from aiorpcx import (
-    JSONRPCv1, JSONRPCLoose, RPCError, ignore_after,
-    Request, Batch,
-)
+from aiorpcx import JSONRPCv1, JSONRPCLoose, RPCError, ignore_after, Request
 from electrumx.lib.coins import BitcoinCash, CoinError, Bitzeny, Dash
-from electrumx.server.daemon import (
-    Daemon, FakeEstimateFeeDaemon, DaemonError
-)
+from electrumx.server.daemon import Daemon, FakeEstimateFeeDaemon
 
 
 coin = BitcoinCash
@@ -34,7 +29,7 @@ def dash_daemon(request):
     return coin.DAEMON(coin, ','.join(urls))
 
 
-class ResponseBase(object):
+class ResponseBase:
 
     def __init__(self, headers, status):
         self.headers = headers
@@ -54,14 +49,14 @@ class JSONResponse(ResponseBase):
         self.result = result
         self.msg_id = msg_id
 
-    async def json(self):
+    async def json(self, loads=json.loads):
         if isinstance(self.msg_id, int):
             message = JSONRPCv1.response_message(self.result, self.msg_id)
         else:
             parts = [JSONRPCv1.response_message(item, msg_id)
                      for item, msg_id in zip(self.result, self.msg_id)]
             message = JSONRPCv1.batch_message_from_parts(parts)
-        return json.loads(message.decode())
+        return loads(message.decode())
 
 
 class HTMLResponse(ResponseBase):
@@ -242,13 +237,12 @@ async def test_broadcast_transaction(daemon):
     daemon.session = ClientSessionGood(('sendrawtransaction', [raw_tx], tx_hash))
     assert await daemon.broadcast_transaction(raw_tx) == tx_hash
 
-
 @pytest.mark.asyncio
-async def test_relayfee(daemon):
-    response = {"relayfee": sats, "other:": "cruft"}
-    daemon.session = ClientSessionGood(('getnetworkinfo', [], response))
-    assert await daemon.getnetworkinfo() == response
-
+async def test_broadcast_package(daemon):
+    package = ["deadbeef", "deadc0de", "facefeed"]
+    result = {"package_msg": "success"}
+    daemon.session = ClientSessionGood(('submitpackage', [package], result))
+    assert await daemon.broadcast_package(package) == result
 
 @pytest.mark.asyncio
 async def test_relayfee(daemon):
@@ -262,10 +256,25 @@ async def test_relayfee(daemon):
 
 
 @pytest.mark.asyncio
-async def test_mempool_hashes(daemon):
+async def test_mempool_info(daemon):
+    bitcoin_per_kvb = 0.00002123
+    response = {
+        'mempoolminfee': bitcoin_per_kvb,
+        'minrelaytxfee': bitcoin_per_kvb,
+        'incrementalrelayfee': bitcoin_per_kvb,
+        'other': 'cruft',
+    }
+    daemon.session = ClientSessionGood(('getmempoolinfo', [], response))
+    expected_result = dict(response)
+    del expected_result['other']
+    assert await daemon.mempool_info() == expected_result
+
+
+@pytest.mark.asyncio
+async def test_mempool_txids_hum(daemon):
     hashes = ['hex_hash1', 'hex_hash2']
     daemon.session = ClientSessionGood(('getrawmempool', [], hashes))
-    assert await daemon.mempool_hashes() == hashes
+    assert await daemon.mempool_txids_hum() == hashes
 
 
 @pytest.mark.asyncio

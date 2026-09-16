@@ -14,7 +14,6 @@ Not currently documented; might become easier to use in future.
 
 import argparse
 import asyncio
-import sys
 
 from electrumx import Env
 from electrumx.server.db import DB
@@ -82,7 +81,7 @@ async def query(args):
         n = None
         utxos = await db.all_utxos(hashX)
         for n, utxo in enumerate(utxos, start=1):
-            print(f'UTXO #{n:,d}: tx_hash {hash_to_hex_str(utxo.tx_hash)} '
+            print(f'UTXO #{n:,d}: tx_hash {hash_to_hex_str(utxo.txid_rev)} '
                   f'tx_pos {utxo.tx_pos:,d} height {utxo.height:,d} '
                   f'value {utxo.value:,d}')
             if n == limit:
@@ -106,8 +105,7 @@ def main():
     parser.add_argument('scripts', nargs='*', default=[], type=str,
                         help='hex scripts to query')
     args = parser.parse_args()
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(query(args))
+    asyncio.run(query(args))
 
 if __name__ == '__main__':
     main()

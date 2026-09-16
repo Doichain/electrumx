@@ -19,16 +19,22 @@ Required
 
 These environment variables are always required:
 
-.. envvar:: COIN
-
-  Must be a :attr:`NAME` from one of the :class:`Coin` classes in
-  `lib/coins.py`_.
-
 .. envvar:: DB_DIRECTORY
 
   The path to the database directory.  Relative paths should be
   relative to the parent process working directory.  This is the
   directory of the `run` script if you use it.
+
+.. envvar:: DB_ENGINE
+
+  Database engine for the UTXO and history database.
+  Choose one of ``leveldb`` or ``rocksdb``.
+  You will need to install the appropriate python package for your engine.
+  In ElectrumX 1.x versions, the default was leveldb.
+  Warning: It is not possible to switch back and forth,
+  the on-disk DB formats are not compatible with each other: you have to resync from genesis.
+  LevelDB was written with HDDs in mind. RocksDB is more modern
+  and on an SSD takes around ~25% less time than LevelDB to sync from genesis.
 
 .. envvar:: DAEMON_URL
 
@@ -157,9 +163,9 @@ Here are some examples of valid services::
 
   Here is an example value of the :envvar:`REPORT_SERVICES` environment variable::
 
-    tcp://sv.usebsv.com:50001,ssl://sv.usebsv.com:50002,wss://sv.usebsv.com:50004
+    tcp://example.com:50001,ssl://example.com:50002,wss://example.com:50004
 
-  This advertizes **tcp**, **ssl**, **wss** services at :const:`sv.usebsv.com` on ports
+  This advertizes **tcp**, **ssl**, **wss** services at :const:`example.com` on ports
   50001, 50002 and 50004 respectively.
 
 .. note:: Certificate Authority-signed certificates don't work over Tor, so you should
@@ -183,6 +189,16 @@ Miscellaneous
 
 These environment variables are optional:
 
+.. envvar:: COIN
+
+  Must be a :attr:`NAME` from one of the :class:`Coin` classes in
+  `lib/coins.py`_.  Defaults to ``Bitcoin``.
+
+.. envvar:: NET
+
+  Must be a :attr:`NET` from one of the :class:`Coin` classes in
+  `lib/coins.py`_.  Defaults to ``mainnet``.
+
 .. envvar:: LOG_FORMAT
 
   The Python logging `format string
@@ -198,18 +214,6 @@ These environment variables are optional:
 
   Set this environment variable to anything non-empty to allow running
   ElectrumX as root.
-
-.. envvar:: NET
-
-  Must be a :envvar:`NET` from one of the **Coin** classes in
-  `lib/coins.py`_.  Defaults to ``mainnet``.
-
-.. envvar:: DB_ENGINE
-
-  Database engine for the UTXO and history database.  The default is
-  ``leveldb``.  The other alternative is ``rocksdb``.  You will need
-  to install the appropriate python package for your engine.  The
-  value is not case sensitive.
 
 .. envvar:: DONATION_ADDRESS
 
@@ -299,10 +303,18 @@ raise them.
   SSL listening sockets are closed until the session count drops
   naturally to 95% of the limit.  Defaults to 1,000.
 
+.. envvar:: MAX_RECV
+
+  The maximum size of an incoming message in bytes, the default is 1,000,000 bytes.
+  Note that the smallest sane/safe value for Bitcoin is ~800,100 bytes,
+  as the largest standard tx can have a weight of 400K but the protocol hex-encodes that,
+  plus there is a few bytes of protocol overhead. Setting this to lower than that
+  would preclude clients from broadcasting txs that could propagate over the network.
+
 .. envvar:: MAX_SEND
 
   The maximum size of a response message to send over the wire, in
-  bytes.  Defaults to 1,000,000 (except for AuxPoW coins, which default
+  bytes.  Defaults to 8,100,000 (except for AuxPoW coins, which default
   to 10,000,000).  Values smaller than 350,000 are taken as 350,000
   because standard Electrum protocol header "chunk" requests are almost
   that large.
@@ -311,19 +323,27 @@ raise them.
   served all at once or not at all, an obvious avenue for abuse.
   :envvar:`MAX_SEND` is a stop-gap until the protocol is improved to
   admit incremental history requests.  Each history entry is
-  approximately 100 bytes so the default is equivalent to a history
-  limit of around 10,000 entries, which should be ample for most
-  legitimate users.  If you use a higher default bear in mind one
-  client can request history for multiple addresses.  Also note that
-  the largest raw transaction you will be able to serve to a client is
-  just under half of :envvar:`MAX_SEND`, as each raw byte becomes 2
-  hexadecimal ASCII characters on the wire.  Very few transactions on
-  Bitcoin mainnet are over 500KB in size.
+  approximately 100 bytes, so the default is equivalent to a history
+  limit of around 80,000 entries, which should be ample for most
+  legitimate users.  If you use a higher default, bear in mind one
+  client can request history for multiple addresses.
+
+  Also note that the largest raw transaction you will be able to serve to a client is
+  just under half of :envvar:`MAX_SEND`, as each raw byte becomes 2 hexadecimal
+  ASCII characters on the wire.  For Bitcoin, the consensus limit for tx size is
+  4 M weight units, while the standardness (policy) limit is 400 K weight units.
+  When serialized as bytes, 4 M weight units is 4 MB, and when encoded as hex that is 8 MB.
+  The default was chosen so that such a tx could still be served.
+  (Note: in multi-party protocol, such as Lightning, a counterparty might collude with a miner
+  to get a tx mined. Being able to obtain such a raw tx might be part of the security
+  requirements of a protocol.)
 
 .. envvar:: COST_SOFT_LIMIT
 .. envvar:: COST_HARD_LIMIT
 .. envvar:: REQUEST_SLEEP
 .. envvar:: INITIAL_CONCURRENT
+.. envvar:: SESSION_GROUP_BY_SUBNET_IPV4
+.. envvar:: SESSION_GROUP_BY_SUBNET_IPV6
 
   All values are integers. :envvar:`COST_SOFT_LIMIT` defaults to :const:`1,000`,
   :envvar:`COST_HARD_LIMIT` to :const:`10,000`, :envvar:`REQUEST_SLEEP` to :const:`2,500`
@@ -354,6 +374,10 @@ raise them.
 
   If a session disconnects, ElectrumX continues to associate its cost with its IP address,
   so if it immediately reconnects it will re-acquire its previous cost allocation.
+  Moreover, sessions are also grouped together based on their IP address subnets, and cost
+  is accrued for the whole group. What subnet sizes to use can be configured via
+  :envvar:`SESSION_GROUP_BY_SUBNET_IPV4` (by default /24) and
+  :envvar:`SESSION_GROUP_BY_SUBNET_IPV6` (by default /48).
 
   A server operator should experiment with different values according to server loads.  It
   is not necessarily true that e.g. having a low soft limit, decreasing concurrency and
@@ -396,7 +420,7 @@ If you are not running a Tor proxy ElectrumX will be unable to connect
 to onion server peers, in which case rather than returning no onion
 peers it will fall back to a hard-coded list.
 
-To give incoming clients a full range of onion servers you will need
+To give incoming clients a full range of onion servers, you will need
 to be running a Tor proxy for ElectrumX to use.
 
 ElectrumX will perform peer-discovery by default and announce itself
@@ -482,5 +506,5 @@ your available physical RAM:
 
   I do not recommend raising this above 2000.
 
-.. _lib/coins.py: https://github.com/kyuupichan/electrumx/blob/master/electrumx/lib/coins.py
+.. _lib/coins.py: https://github.com/spesmilo/electrumx/blob/master/src/electrumx/lib/coins.py
 .. _uvloop: https://pypi.python.org/pypi/uvloop
